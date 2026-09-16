@@ -1,0 +1,24 @@
+# PostgreSQL local pour le développement (optionnel : utilisable à la place d'une installation native).
+#   docker compose up -d
+#   DATABASE_URL=postgresql://crypto:crypto@localhost:5432/crypto_arena
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: crypto-arena-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: crypto
+      POSTGRES_PASSWORD: crypto
+      POSTGRES_DB: crypto_arena
+    ports:
+      - "5432:5432"
+    volumes:
+      - crypto_arena_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crypto -d crypto_arena"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  crypto_arena_pgdata:

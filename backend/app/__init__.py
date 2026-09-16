@@ -1,0 +1,1 @@
+"""Crypto Arena backend package."""
