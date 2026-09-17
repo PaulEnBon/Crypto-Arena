@@ -14,6 +14,7 @@ from app.middleware.error_handlers import register_exception_handlers
 from app.middleware.request_context import RequestContextMiddleware
 from app.routers import api_router
 from app.services.coingecko_service import CoinGeckoService
+from app.services.neon_auth_service import NeonAuthVerifier
 
 settings = get_settings()
 logging.basicConfig(
@@ -26,11 +27,19 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     coingecko = CoinGeckoService(settings)
+    neon_auth = NeonAuthVerifier(settings)
     app.state.coingecko = coingecko
+    app.state.neon_auth = neon_auth
     if settings.AUTO_INIT_DB:
         await init_database(coingecko)
-    logger.info("%s started (env=%s, docs=/docs)", settings.APP_NAME, settings.APP_ENV)
+    logger.info(
+        "%s started (env=%s, docs=/docs, Google/GitHub sign-in %s)",
+        settings.APP_NAME,
+        settings.APP_ENV,
+        "enabled" if neon_auth.enabled else "disabled",
+    )
     yield
+    await neon_auth.aclose()
     await coingecko.aclose()
     await engine.dispose()
 

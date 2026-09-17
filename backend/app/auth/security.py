@@ -1,5 +1,6 @@
 """Password hashing (bcrypt) and JWT access tokens (PyJWT)."""
 
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -11,6 +12,9 @@ from app.exceptions import InvalidTokenError, TokenExpiredError
 # bcrypt silently ignores (or, since bcrypt 5, rejects) bytes beyond 72; we enforce the limit in the schemas too.
 BCRYPT_MAX_PASSWORD_BYTES = 72
 
+# A bcrypt hash always starts with "$": a value starting with "!" can never match any password.
+UNUSABLE_PASSWORD_PREFIX = "!"
+
 
 def hash_password(password: str) -> str:
     settings = get_settings()
@@ -18,7 +22,18 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
 
+def make_unusable_password() -> str:
+    """Marker stored for Google / GitHub accounts, which have no password (same idea as Django)."""
+    return UNUSABLE_PASSWORD_PREFIX + secrets.token_hex(16)
+
+
+def has_usable_password(password_hash: str) -> bool:
+    return not password_hash.startswith(UNUSABLE_PASSWORD_PREFIX)
+
+
 def verify_password(password: str, password_hash: str) -> bool:
+    if not has_usable_password(password_hash):
+        return False
     try:
         return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
     except ValueError:

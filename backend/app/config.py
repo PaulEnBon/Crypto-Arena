@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     COINGECKO_CACHE_TTL_SEARCH: int = 600
     COINGECKO_CACHE_TTL_TRENDING: int = 300
 
+    # --- Neon Auth : connexion Google / GitHub (vide = désactivée) ---
+    NEON_AUTH_URL: str = ""
+    NEON_AUTH_JWKS_TTL_SECONDS: int = 3600
+    NEON_AUTH_CLOCK_LEEWAY_SECONDS: int = 30
+
     # --- Game rules ---
     INITIAL_BALANCE: Decimal = Decimal("10000")
     SNAPSHOT_INTERVAL_MINUTES: int = 60

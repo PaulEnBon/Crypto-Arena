@@ -47,7 +47,7 @@ Documentation complémentaire : [API](docs/API.md) · [Scénario de démonstrati
 
 | Domaine          | Fonctionnalités                                                                                                                              |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Authentification | Inscription (username, email, mot de passe + confirmation), connexion, JWT, déconnexion, routes privées protégées, session restaurée au rechargement, gestion du jeton expiré |
+| Authentification | Inscription (username, email, mot de passe + confirmation), connexion, **connexion Google / GitHub via Neon Auth**, JWT, déconnexion, routes privées protégées, session restaurée au rechargement, gestion du jeton expiré |
 | Dashboard        | Valeur totale, cash disponible, investissement total, profit/perte, performance %, graphique d'évolution (30 j), position au classement, cryptos tendances, top cryptos, dernières transactions |
 | Marché           | Liste CoinGecko (rang, nom, symbole, prix, variation 24 h, market cap, volume, sparkline 7 j), recherche locale + recherche CoinGecko (débouncée), tri par colonne, filtre hausse/baisse, pagination, taille de page |
 | Détail crypto    | Route `/crypto/:coinId` : logo, prix, variations 24 h/7 j/30 j, graphique historique (1 j → 1 an), statistiques (market cap, volume, ATH, offre…), description, formulaire achat/vente avec confirmation |
@@ -161,6 +161,7 @@ Backend — `backend/.env` (modèle : [`backend/.env.example`](backend/.env.exam
 | `AUTO_INIT_DB`                  | non         | Crée les tables et le catalogue au démarrage (défaut `true`)                            |
 | `ACCESS_TOKEN_EXPIRE_MINUTES`   | non         | Durée de vie du JWT (défaut 480)                                                        |
 | `CORS_ORIGINS`                  | non         | Origines autorisées, séparées par des virgules (défaut `http://localhost:5173,http://127.0.0.1:5173`) |
+| `NEON_AUTH_URL`                 | non         | « Auth URL » de la branche Neon : active la connexion Google / GitHub (vide = désactivée, non secret) |
 | `COINGECKO_CACHE_TTL_*`         | non         | Durées de cache en secondes (marchés 60, prix 30, détail 120, historique 300, recherche 600, tendances 300) |
 | `COINGECKO_TIMEOUT_SECONDS`, `COINGECKO_MAX_RETRIES` | non | Timeout (10 s) et nombre de nouvelles tentatives (2)                        |
 | `INITIAL_BALANCE`               | non         | Capital de départ (défaut 10000)                                                        |
@@ -171,6 +172,8 @@ Frontend — `frontend/.env` (modèle : [`frontend/.env.example`](frontend/.env.
 | Variable        | Rôle                                                                 |
 | --------------- | -------------------------------------------------------------------- |
 | `VITE_API_URL`  | URL du backend **sans** `/api` ni slash final (`http://localhost:8000`) |
+| `VITE_NEON_AUTH_URL` | « Auth URL » de la branche Neon ; vide = boutons Google / GitHub masqués |
+| `VITE_OAUTH_PROVIDERS` | Fournisseurs affichés : `google`, `github` ou `google,github` (défaut `google`) |
 
 Seules les variables préfixées `VITE_` sont exposées au navigateur : aucun secret ne doit y figurer. Les fichiers `.env` sont ignorés par git.
 
@@ -237,7 +240,7 @@ cd frontend
 npm run test
 ```
 
-24 tests dans `src/tests/` : `LoginForm` (validation, soumission), `TransactionForm` (validation conditionnelle achat/vente, confirmation), `MarketsPage` (affichage du loading, affichage d'une erreur API + « Réessayer »), `useAsync` (états, race condition, annulation), `appReducer` (immutabilité), `validation`.
+32 tests dans `src/tests/` : `LoginForm` (validation, soumission), `TransactionForm` (validation conditionnelle achat/vente, confirmation), `MarketsPage` (affichage du loading, affichage d'une erreur API + « Réessayer »), `useAsync` (états, race condition, annulation), `appReducer` (immutabilité), `validation`, `SocialLoginButtons` (affichage conditionnel, redirection, erreur), `OAuthCallbackPage` (échange du jeton, erreurs).
 
 Backend (pytest, SQLite en mémoire + faux service CoinGecko : aucun réseau requis) :
 
@@ -246,7 +249,7 @@ cd backend
 python -m pytest
 ```
 
-41 tests : authentification/JWT, moteur de trading et erreurs métier, valorisation, snapshots, classement, profil, service CoinGecko (cache, réponse périmée, 429, 404, erreur réseau).
+60 tests : authentification/JWT, moteur de trading et erreurs métier, valorisation, snapshots, classement, profil, service CoinGecko (cache, réponse périmée, 429, 404, erreur réseau), connexion Google / GitHub (jetons Ed25519 réels : création et liaison de compte, email non vérifié, jeton anonyme, signature forgée, émetteur ou audience invalides, jeton expiré, cache des clés JWKS).
 
 Qualité :
 
@@ -285,6 +288,18 @@ python -m app.database.seed
 
 Les bases PostgreSQL gratuites de **Render** ne sont pas utilisées car elles expirent 30 jours après leur création.
 
+**Connexion Google et GitHub (Neon Auth)** : Neon Auth est activé sur la branche `production`. Son « Auth URL » est `https://ep-sparkling-thunder-b26m0jyi.neonauth.c-6.eu-central-1.aws.neon.tech/neondb/auth` (adresse publique, non secrète).
+
+| Où | Réglage |
+| -- | ------- |
+| Neon Console, onglet Auth | domaine autorisé `https://crypto-arena-three.vercel.app` (localhost est autorisé) ; identifiants Google et GitHub personnels ; inscription par mot de passe de Neon Auth désactivable, l'application ne l'utilise pas |
+| Google Cloud, Google Auth Platform | client OAuth « Application Web » ; origine `https://crypto-arena-three.vercel.app` ; URI de redirection `<Auth URL>/callback/google` ; application publiée |
+| GitHub, Developer settings, OAuth Apps | Homepage `https://crypto-arena-three.vercel.app` ; callback `<Auth URL>/callback/github` |
+| Render | `NEON_AUTH_URL=<Auth URL>` |
+| Vercel | `VITE_NEON_AUTH_URL=<Auth URL>` et `VITE_OAUTH_PROVIDERS=google` ou `google,github`, puis redéployer |
+
+Déroulement : le bouton redirige vers Google ou GitHub via Neon Auth, qui renvoie sur `/auth/callback` avec un vérificateur de session à usage unique. La page l'échange contre un JWT Neon (Ed25519, quelques minutes), l'envoie à `POST /api/auth/oauth`, et le backend répond avec le JWT habituel de l'application. Les identifiants Google partagés de Neon ne servent qu'en développement.
+
 **Backend (Render)** : le blueprint [`render.yaml`](render.yaml) crée uniquement le service web, avec `plan: free` (sans ce champ, Render choisit une instance payante) et `region: frankfurt` pour être au plus près de Neon. Variables demandées à la création : `DATABASE_URL` (URL Neon directe) et `COINGECKO_API_KEY`. `JWT_SECRET` est générée automatiquement ; `CORS_ORIGINS` est à mettre à jour avec l'URL Vercel. Alternative Docker (Railway, Fly.io…) : [`backend/Dockerfile`](backend/Dockerfile), commande `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Les tables sont créées au démarrage si elles n'existent pas (`AUTO_INIT_DB=true`, idempotent).
 
 **Frontend (Vercel ou Netlify)** : racine `frontend/`, build `npm run build`, dossier `dist`. Variable `VITE_API_URL=https://votre-backend.onrender.com`. Les réécritures SPA sont fournies (`vercel.json`, `netlify.toml`, `public/_redirects`) pour que `/crypto/bitcoin` serve `index.html`.
@@ -309,13 +324,13 @@ Crypto-Arena/
 │   │   ├── exceptions.py            exceptions métier → codes HTTP
 │   │   ├── runtime.py               boucle d'événements (Windows)
 │   │   ├── auth/                    security.py (bcrypt, JWT) · dependencies.py (get_current_user)
-│   │   ├── database/                base.py · session.py · init_db.py · seed.py
+│   │   ├── database/                base.py · session.py · init_db.py · migrations.py · seed.py
 │   │   ├── middleware/              error_handlers.py · request_context.py
 │   │   ├── models/                  user · portfolio · asset · holding · transaction · snapshot
 │   │   ├── routers/                 auth · crypto · portfolio · trades · leaderboard · profile · health
 │   │   ├── schemas/                 auth · user · crypto · portfolio · trade · leaderboard · health · common (Paginated[T])
-│   │   └── services/                coingecko_service · cache · auth · asset · portfolio · trade · leaderboard
-│   └── tests/                       conftest (SQLite + FakeCoinGecko) · test_auth · test_trades · test_portfolio_leaderboard · test_coingecko_service
+│   │   └── services/                coingecko_service · cache · auth · neon_auth_service · asset · portfolio · trade · leaderboard
+│   └── tests/                       conftest (SQLite + FakeCoinGecko) · test_auth · test_oauth · test_trades · test_portfolio_leaderboard · test_coingecko_service
 └── frontend/
     ├── index.html · vite.config.ts · tsconfig*.json · eslint.config.js · vercel.json · netlify.toml · .env.example
     ├── public/                      favicon.svg · _redirects
@@ -324,7 +339,7 @@ Crypto-Arena/
         ├── components/
         │   ├── ui/                  Button · Card · Modal · Badge · FormField · LoadingSpinner · ErrorMessage · EmptyState · Pagination · StatCard · Sparkline · SearchInput · PriceChange · CoinAvatar · Skeleton · PageHeader · icons
         │   ├── layout/              Navbar · Sidebar · Logo · ToastContainer · ProtectedRoute
-        │   ├── auth/                LoginForm · RegisterForm
+        │   ├── auth/                LoginForm · RegisterForm · SocialLoginButtons
         │   ├── crypto/              CryptoTable · CryptoCard · PriceChart · TrendingList · CoinSearchResults
         │   ├── portfolio/           PortfolioSummary · HoldingsTable · TransactionHistory · AllocationChart · PerformanceChart
         │   ├── trade/               TransactionForm
@@ -332,11 +347,11 @@ Crypto-Arena/
         ├── context/                 appReducer · AppContext · AppProvider · ToastContext · ToastProvider
         ├── hooks/                   useAsync · useAuth · usePortfolio · useCoinGecko · useDebounce · useLeaderboard
         ├── layouts/                 AppLayout · AuthLayout
-        ├── pages/                   Landing · Login · Register · Dashboard · Markets · CryptoDetail · Portfolio · Leaderboard · Profile · NotFound
-        ├── services/                apiClient · authService · cryptoService · portfolioService · tradeService · leaderboardService · profileService
+        ├── pages/                   Landing · Login · Register · OAuthCallback · Dashboard · Markets · CryptoDetail · Portfolio · Leaderboard · Profile · NotFound
+        ├── services/                apiClient · authService · neonAuthService · cryptoService · portfolioService · tradeService · leaderboardService · profileService
         ├── types/                   api · user · crypto · portfolio · leaderboard
         ├── utils/                   format · validation · storage · profiler
-        └── tests/                   setup + 6 fichiers de tests
+        └── tests/                   setup + 8 fichiers de tests
 ```
 
 ## 17. API
@@ -345,6 +360,7 @@ Résumé des endpoints (détails, exemples et codes d'erreur dans [docs/API.md](
 
 ```
 POST  /api/auth/register            POST  /api/auth/login             GET  /api/auth/me
+POST  /api/auth/oauth               (échange du jeton Neon Auth après Google / GitHub)
 GET   /api/crypto/markets           GET   /api/crypto/trending        GET  /api/crypto/search?q=
 GET   /api/crypto/prices?ids=       GET   /api/crypto/{coin_id}       GET  /api/crypto/{coin_id}/history?days=
 GET   /api/portfolio                GET   /api/portfolio/transactions GET  /api/portfolio/snapshots
@@ -360,6 +376,7 @@ Toutes les erreurs ont la forme `{ "detail": "message lisible", "code": "CODE_MA
 
 - Mots de passe hachés avec **bcrypt** (jamais en clair), comparaison à temps constant, aucun indice sur l'existence d'un email à la connexion.
 - **JWT** signé (HS256) avec `JWT_SECRET` hors dépôt, expiration, vérification sur chaque route privée.
+- **Connexion Google / GitHub** : le backend n'accepte le jeton de Neon Auth qu'après vérification de sa signature Ed25519 avec les clés publiques de Neon (JWKS), de son émetteur, de son audience et de son expiration. Les jetons anonymes sont refusés, ainsi que les emails non vérifiés par le fournisseur ; un compte existant n'est relié que par un email vérifié. Les comptes créés ainsi n'ont aucun mot de passe utilisable.
 - Clé CoinGecko et secrets uniquement dans `backend/.env` (ignoré par git) ; `.env.example` sans valeurs.
 - Validation systématique côté serveur (Pydantic : types, bornes, regex ; règles métier : solde, quantité, montant minimum). Le prix n'est jamais accepté du client.
 - Requêtes SQL paramétrées via SQLAlchemy (pas d'injection), contraintes `CHECK`/`UNIQUE`/clés étrangères, transactions + verrous ligne pour les opérations financières.
@@ -376,6 +393,7 @@ Toutes les erreurs ont la forme `{ "detail": "message lisible", "code": "CODE_MA
 - **Tailwind CSS 4** avec des tokens de design (`@theme`) et quelques classes composées (`card`, `input`, `nav-link`) : identité visuelle propre, cohérente, sans framework de composants.
 - **Recharts** pour les graphiques riches (historique, performance, répartition) et un `Sparkline` SVG maison pour les 50-100 mini-courbes du marché (bien plus léger).
 - **TypeScript strict** (`noUncheckedIndexedAccess`, `verbatimModuleSyntax`…) et interdiction de `any` par ESLint ; génériques maison `Paginated<T>`, `ApiResponse<T>`, `useAsync<T>`, `request<T>`.
+- **Connexion Google / GitHub par échange de jeton** : Neon Auth prouve l'identité, le backend décide de l'accès. Le jeton Neon n'est utilisé qu'une fois, puis l'application garde son propre JWT : les inscriptions par email, les routes privées et les tests existants restent inchangés, et la session ne dépend pas des cookies tiers du domaine Neon. Le SDK Neon Auth est chargé dynamiquement (`neon-auth-*.js`), uniquement quand une connexion sociale commence.
 - **Tests sans réseau** : faux service CoinGecko et SQLite en mémoire côté backend, mocks de services côté frontend → suites rapides et déterministes.
 
 ## 20. Performance
@@ -394,7 +412,8 @@ Démarche : **mesurer avant d'optimiser**. `MarketsPage` enveloppe le tableau da
 - Classement recalculé en mémoire à partir de tous les portefeuilles (adapté à quelques milliers de joueurs, pas plus).
 - Prix rafraîchis à la demande (pas de temps réel), granularité liée au cache (30-60 s).
 - Pas de frais de transaction, d'ordres limite ni de gestion de plusieurs devises.
-- Schéma créé par `create_all` (pas de migrations Alembic) ; jeton en `localStorage` (voir §18 pour l'alternative cookie httpOnly).
+- Schéma créé par `create_all` et quelques migrations idempotentes (`app/database/migrations.py`) plutôt qu'Alembic ; jeton en `localStorage` (voir §18 pour l'alternative cookie httpOnly).
+- Le SDK `@neondatabase/auth` est encore en version bêta ; les identifiants Google partagés de Neon sont réservés au développement.
 - Plan CoinGecko Demo : ~30 appels/minute et historique limité à 365 jours.
 
 ## 22. Améliorations possibles

@@ -4,7 +4,13 @@ import { AppContext, type AppContextValue } from '@/context/AppContext';
 import { appReducer, initialAppState } from '@/context/appReducer';
 import { useToast } from '@/context/ToastContext';
 import { UNAUTHORIZED_EVENT } from '@/services/apiClient';
-import { fetchCurrentUser, login as loginRequest, register as registerRequest } from '@/services/authService';
+import {
+  exchangeOAuthToken,
+  fetchCurrentUser,
+  login as loginRequest,
+  register as registerRequest,
+} from '@/services/authService';
+import { signOutNeonAuth } from '@/services/neonAuthService';
 import { fetchPortfolio } from '@/services/portfolioService';
 import { ApiError, type LoginCredentials, type Portfolio, type RegisterPayload, type User } from '@/types';
 import { clearStoredToken, getStoredToken, storeToken } from '@/utils/storage';
@@ -78,10 +84,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const loginWithOAuthToken = useCallback(async (neonToken: string) => {
+    dispatch({ type: 'SET_ERROR', payload: null });
+    try {
+      const response = await exchangeOAuthToken(neonToken);
+      storeToken(response.access_token);
+      dispatch({ type: 'LOGIN', payload: response.user });
+    } catch (error) {
+      dispatch({ type: 'SET_ERROR', payload: errorMessage(error) });
+      throw error;
+    }
+  }, []);
+
   const logout = useCallback(
     (message = 'Vous êtes déconnecté. À bientôt dans l’arène !') => {
       clearStoredToken();
       dispatch({ type: 'LOGOUT' });
+      void signOutNeonAuth();
       notify({ type: 'info', message });
     },
     [notify],
@@ -103,8 +122,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // useMemo/useCallback are justified here: the value is consumed by many components and the
   // functions are listed as effect dependencies (e.g. refreshPortfolio) -> they must be stable.
   const value = useMemo<AppContextValue>(
-    () => ({ ...state, login, register, logout, refreshPortfolio, applyPortfolio, updateUser, clearError }),
-    [state, login, register, logout, refreshPortfolio, applyPortfolio, updateUser, clearError],
+    () => ({
+      ...state,
+      login,
+      register,
+      loginWithOAuthToken,
+      logout,
+      refreshPortfolio,
+      applyPortfolio,
+      updateUser,
+      clearError,
+    }),
+    [state, login, register, loginWithOAuthToken, logout, refreshPortfolio, applyPortfolio, updateUser, clearError],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

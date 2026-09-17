@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
     id            SERIAL PRIMARY KEY,
     username      VARCHAR(20)  NOT NULL UNIQUE,
     email         VARCHAR(255) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,              -- bcrypt, jamais en clair
+    password_hash VARCHAR(255) NOT NULL,              -- bcrypt, jamais en clair ; "!..." = compte Google/GitHub sans mot de passe
+    neon_auth_id  VARCHAR(64)  UNIQUE,                -- identifiant Neon Auth (connexion Google / GitHub), NULL sinon
     is_demo       BOOLEAN      NOT NULL DEFAULT FALSE, -- comptes de démonstration (seed)
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );

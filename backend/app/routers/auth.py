@@ -1,9 +1,14 @@
 from fastapi import APIRouter, status
 
-from app.auth.dependencies import CurrentUser, DbSession
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
+from app.auth.dependencies import CurrentUser, DbSession, NeonAuth
+from app.schemas.auth import LoginRequest, OAuthExchangeRequest, RegisterRequest, TokenResponse
 from app.schemas.user import UserPublic
-from app.services.auth_service import authenticate_user, build_token_response, register_user
+from app.services.auth_service import (
+    authenticate_user,
+    build_token_response,
+    register_user,
+    sign_in_with_neon_identity,
+)
 
 router = APIRouter(prefix="/auth", tags=["Authentification"])
 
@@ -18,6 +23,25 @@ async def register(data: RegisterRequest, db: DbSession) -> TokenResponse:
 @router.post("/login", response_model=TokenResponse)
 async def login(data: LoginRequest, db: DbSession) -> TokenResponse:
     user = await authenticate_user(db, data.email, data.password)
+    return build_token_response(user)
+
+
+@router.post(
+    "/oauth",
+    response_model=TokenResponse,
+    responses={
+        401: {"description": "Jeton Neon Auth invalide, expiré ou anonyme"},
+        403: {"description": "Email non vérifié par Google ou GitHub"},
+        503: {"description": "Connexion Google / GitHub désactivée ou Neon Auth injoignable"},
+    },
+)
+async def oauth_sign_in(data: OAuthExchangeRequest, db: DbSession, neon_auth: NeonAuth) -> TokenResponse:
+    """Exchange the JWT issued by Neon Auth after a Google / GitHub sign-in for a Crypto Arena JWT.
+
+    The account is found by its Neon Auth id, linked by verified email, or created with 10 000 €.
+    """
+    identity = await neon_auth.verify(data.token)
+    user = await sign_in_with_neon_identity(db, identity)
     return build_token_response(user)
 
 

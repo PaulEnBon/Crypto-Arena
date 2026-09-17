@@ -16,8 +16,9 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        // Split the heavy charting library from the app bundle for better caching.
-        manualChunks: { recharts: ['recharts'] },
+        // Split heavy libraries from the app bundle for better caching. The Neon Auth SDK is only
+        // imported dynamically, so its chunk is downloaded when a Google / GitHub sign-in starts.
+        manualChunks: { recharts: ['recharts'], 'neon-auth': ['@neondatabase/auth'] },
       },
     },
   },

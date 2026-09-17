@@ -11,6 +11,7 @@ import { LeaderboardPage } from '@/pages/LeaderboardPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { MarketsPage } from '@/pages/MarketsPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
+import { OAuthCallbackPage } from '@/pages/OAuthCallbackPage';
 import { PortfolioPage } from '@/pages/PortfolioPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { RegisterPage } from '@/pages/RegisterPage';
@@ -25,6 +26,8 @@ export default function App() {
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          {/* Return point after Google / GitHub (Neon Auth) */}
+          <Route path="/auth/callback" element={<OAuthCallbackPage />} />
         </Route>
 
         {/* Private routes: ProtectedRoute -> AppLayout (navbar + sidebar) -> page */}

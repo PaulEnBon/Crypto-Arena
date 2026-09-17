@@ -23,6 +23,27 @@ Pourquoi : la clé API reste secrète côté serveur, le backend met en cache le
 - Jeton expiré → 401 `TOKEN_EXPIRED` → le client déclenche un événement global, vide la session et affiche « Votre session a expiré » (`AppProvider.tsx`).
 - Le jeton est en `localStorage` (persistance au rafraîchissement). Alternative discutable : cookie httpOnly (protège du XSS mais impose CSRF + même domaine) — choix assumé pour un projet déployé sur deux domaines (Vercel + Render).
 
+### Connexion Google et GitHub (Neon Auth)
+
+Phrase à retenir : **Neon Auth prouve l'identité, notre backend décide de l'accès.**
+
+1. Le bouton « Continuer avec Google » charge le SDK Neon Auth à la demande (`neonAuthService.ts`, import dynamique) et redirige vers Google.
+2. Google renvoie vers Neon Auth, qui crée l'utilisateur dans le schéma `neon_auth` de la base, puis redirige vers `/auth/callback` avec un **vérificateur de session à usage unique** dans l'URL.
+3. La page de retour (`OAuthCallbackPage.tsx`) échange ce vérificateur contre un **JWT Neon** signé en Ed25519, valable quelques minutes.
+4. Elle l'envoie à `POST /api/auth/oauth`. Le backend (`neon_auth_service.py`) vérifie la signature avec les **clés publiques** de Neon (JWKS, mises en cache), l'émetteur, l'audience et l'expiration.
+5. `sign_in_with_neon_identity` retrouve le joueur par son identifiant Neon, sinon relie un compte existant au **même email vérifié**, sinon crée un joueur avec ses 10 000 €. Le backend renvoie alors **son propre JWT** : le reste de l'application ne voit aucune différence.
+
+Pourquoi cet « échange de jeton » plutôt que remplacer notre authentification :
+
+- les critères notés (bcrypt, JWT, formulaires validés) restent intacts, Google/GitHub s'ajoutent à côté ;
+- une seule façon de protéger les routes (`get_current_user`), donc rien à modifier dans le trading ou le classement ;
+- le jeton Neon ne sert qu'une fois : la session ne dépend pas des cookies tiers du domaine Neon, que certains navigateurs bloquent ;
+- asymétrique : Neon signe avec une clé privée, nous vérifions avec la clé publique, aucun secret partagé à stocker.
+
+Points de sécurité à citer : jetons anonymes de Neon refusés (ils sont signés avec la même clé mais n'identifient personne), email non vérifié refusé (sinon quelqu'un pourrait se faire passer pour un joueur existant), algorithme imposé (`EdDSA` uniquement), tolérance d'horloge de 30 s mesurée entre notre machine et Neon, comptes Google/GitHub sans mot de passe utilisable (marqueur commençant par `!`, comme Django), domaine Vercel déclaré dans les domaines autorisés de Neon Auth.
+
+Base de données : la colonne `users.neon_auth_id` (unique, nullable) a été ajoutée par une **migration idempotente** (`app/database/migrations.py`, `ADD COLUMN IF NOT EXISTS`), testée deux fois sur un PostgreSQL 18 local avant d'être appliquée à Neon, sans perte de données.
+
 ## 3. Moteur de trading
 
 `services/trade_service.py` — la fonction `execute_trade` fait, dans une seule transaction SQL :
@@ -141,3 +162,5 @@ Cache en mémoire (un seul processus) → Redis pour plusieurs instances ; class
 - *Comment évitez-vous les doubles achats simultanés ?* → transaction SQL + `FOR UPDATE` (§3).
 - *Pourquoi Tailwind ?* → système de design (tokens `@theme`) cohérent et rapide, classes utilitaires composées dans quelques classes maison (`card`, `input`, `nav-link`).
 - *Pourquoi PostgreSQL et pas SQLite ?* → contraintes, `NUMERIC`, verrous ligne, concurrence ; SQLite ne sert qu'aux tests.
+- *Comment savez-vous que le jeton Google n'est pas falsifié ?* → nous ne recevons jamais le jeton de Google : Neon Auth nous donne un JWT signé en Ed25519 que nous vérifions avec ses clés publiques ; un jeton modifié ou signé par une autre clé est rejeté (testé).
+- *Que se passe-t-il si un joueur inscrit par email se connecte ensuite avec Google ?* → même compte, relié par l'email, uniquement si Google l'a vérifié ; son mot de passe continue de fonctionner.

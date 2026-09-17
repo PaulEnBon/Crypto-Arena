@@ -32,6 +32,21 @@ class InvalidTokenError(UnauthorizedError):
     code = "INVALID_TOKEN"
 
 
+class EmailNotVerifiedError(AppError):
+    status_code = 403
+    code = "EMAIL_NOT_VERIFIED"
+
+
+class OAuthDisabledError(AppError):
+    status_code = 503
+    code = "OAUTH_DISABLED"
+
+
+class OAuthUnavailableError(AppError):
+    status_code = 503
+    code = "OAUTH_UNAVAILABLE"
+
+
 class ConflictError(AppError):
     status_code = 409
     code = "CONFLICT"

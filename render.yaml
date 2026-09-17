@@ -24,5 +24,7 @@ services:
         generateValue: true
       - key: COINGECKO_API_KEY
         sync: false            # à renseigner dans le dashboard Render (jamais dans le dépôt)
+      - key: NEON_AUTH_URL        # connexion Google / GitHub : "Auth URL" de la branche Neon (non secrète)
+        value: https://ep-sparkling-thunder-b26m0jyi.neonauth.c-6.eu-central-1.aws.neon.tech/neondb/auth
       - key: CORS_ORIGINS
         value: https://VOTRE-FRONTEND.vercel.app   # URL publique du frontend, sans slash final

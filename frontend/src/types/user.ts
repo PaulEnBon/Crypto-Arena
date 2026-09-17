@@ -13,6 +13,9 @@ export interface AuthResponse {
   user: User;
 }
 
+/** Social sign-in providers handled by Neon Auth. */
+export type OAuthProvider = 'google' | 'github';
+
 export interface LoginCredentials {
   email: string;
   password: string;

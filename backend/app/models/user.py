@@ -18,7 +18,10 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    # For Google / GitHub accounts this holds an unusable marker (see auth.security.make_unusable_password).
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Neon Auth user id (JWT `sub`) for accounts linked to Google / GitHub; NULL for email + password only.
+    neon_auth_id: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
     # Demo/seed accounts are flagged so they can be identified and purged independently of real users.
     is_demo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)

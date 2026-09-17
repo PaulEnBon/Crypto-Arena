@@ -18,6 +18,7 @@ Documentation interactive générée par FastAPI (OpenAPI) : `http://localhost:8
 | ---- | ------------------------------------------------------------------ | ----------------------------------------------------- |
 | 400  | `INVALID_QUANTITY`, `INSUFFICIENT_FUNDS`, `INSUFFICIENT_HOLDINGS`  | Règle métier du trading violée                        |
 | 401  | `UNAUTHORIZED`, `INVALID_CREDENTIALS`, `TOKEN_EXPIRED`, `INVALID_TOKEN` | Non connecté / mauvais identifiants / jeton expiré |
+| 403  | `EMAIL_NOT_VERIFIED`                                               | Connexion Google / GitHub avec un email non vérifié   |
 | 404  | `NOT_FOUND`, `COIN_NOT_FOUND`, `HTTP_ERROR`                        | Ressource ou cryptomonnaie inexistante                |
 | 409  | `EMAIL_TAKEN`, `USERNAME_TAKEN`                                    | Conflit d'unicité                                     |
 | 422  | `VALIDATION_ERROR` (+ tableau `errors[{field, message}]`)          | Corps ou paramètres invalides (Pydantic)              |
@@ -25,6 +26,7 @@ Documentation interactive générée par FastAPI (OpenAPI) : `http://localhost:8
 | 500  | `DATABASE_ERROR`, `INTERNAL_ERROR`                                 | Erreur PostgreSQL / erreur inattendue                 |
 | 502  | `COINGECKO_ERROR`, `INVALID_PRICE`                                 | Réponse CoinGecko invalide / prix indisponible        |
 | 503  | `COINGECKO_UNAVAILABLE`                                            | CoinGecko injoignable (timeout, réseau)               |
+| 503  | `OAUTH_DISABLED`, `OAUTH_UNAVAILABLE`                              | Connexion Google / GitHub non configurée, ou Neon Auth injoignable |
 
 Pagination : les listes paginées renvoient l'enveloppe générique `Paginated<T>` :
 
@@ -52,9 +54,12 @@ Pagination : les listes paginées renvoient l'enveloppe générique `Paginated<T
 | ------- | ---------------- | ---- | ------------------------------------------------------- | ---------------------------------------- |
 | POST    | `/auth/register` | non  | `{ username, email, password, password_confirm }`       | `201` `{ access_token, token_type, expires_in, user }` |
 | POST    | `/auth/login`    | non  | `{ email, password }`                                   | `200` idem                               |
+| POST    | `/auth/oauth`    | non  | `{ token }` : JWT délivré par Neon Auth                 | `200` `{ access_token, token_type, expires_in, user }` |
 | GET     | `/auth/me`       | oui  | —                                                       | `{ id, username, email, created_at, is_demo }` |
 
 Règles de validation (client **et** serveur) : username `[A-Za-z0-9_]{3,20}`, email valide, mot de passe ≥ 8 caractères avec majuscule, minuscule et chiffre, confirmation identique. Chaque inscription crée un portefeuille avec `INITIAL_BALANCE` (10 000 €).
+
+**`POST /auth/oauth` (Google / GitHub)** : le frontend obtient le jeton auprès de Neon Auth après la redirection OAuth. Le backend vérifie la signature EdDSA avec `<NEON_AUTH_URL>/.well-known/jwks.json`, l'émetteur et l'audience (Auth URL ou son origine), `exp`/`iat` (tolérance de 30 s), refuse les jetons anonymes et les emails non vérifiés, puis : retrouve le joueur par son identifiant Neon (`sub`), sinon relie le compte existant ayant le même email, sinon crée un joueur (nom dérivé du profil, suffixe numérique si déjà pris) avec son portefeuille de départ. Réponse identique à `/auth/login`.
 
 ```bash
 curl -X POST http://localhost:8000/api/auth/login -H "Content-Type: application/json" \

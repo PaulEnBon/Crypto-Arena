@@ -44,6 +44,12 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
 
 
+class OAuthExchangeRequest(BaseModel):
+    """JWT delivered by Neon Auth to the browser after a Google or GitHub sign-in."""
+
+    token: str = Field(min_length=20, max_length=4096)
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"

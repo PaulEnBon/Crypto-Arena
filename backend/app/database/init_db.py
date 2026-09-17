@@ -10,6 +10,7 @@ import logging
 import app.models  # noqa: F401 - importing registers every table on Base.metadata
 from app.config import get_settings
 from app.database.base import Base
+from app.database.migrations import apply_schema_upgrades
 from app.database.session import AsyncSessionLocal, engine
 from app.runtime import run
 from app.services.asset_service import refresh_asset_metadata, seed_curated_assets
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 async def create_tables() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+        await apply_schema_upgrades(connection)
 
 
 async def init_database(coingecko: CoinGeckoService | None = None) -> None:

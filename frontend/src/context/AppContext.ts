@@ -6,6 +6,8 @@ import type { LoginCredentials, Portfolio, RegisterPayload, User } from '@/types
 export interface AppContextValue extends AppState {
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
+  /** Google / GitHub: exchange the Neon Auth JWT for the app's own session. */
+  loginWithOAuthToken: (neonToken: string) => Promise<void>;
   logout: (message?: string) => void;
   refreshPortfolio: (signal?: AbortSignal) => Promise<Portfolio>;
   applyPortfolio: (portfolio: Portfolio) => void;

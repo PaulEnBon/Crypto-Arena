@@ -11,6 +11,7 @@ from app.database.session import get_db
 from app.exceptions import UnauthorizedError
 from app.models import User
 from app.services.coingecko_service import CoinGeckoService
+from app.services.neon_auth_service import NeonAuthVerifier
 
 bearer_scheme = HTTPBearer(auto_error=False, description="JWT obtenu via /api/auth/login")
 
@@ -35,6 +36,13 @@ def get_coingecko(request: Request) -> CoinGeckoService:
     return service
 
 
+def get_neon_auth(request: Request) -> NeonAuthVerifier:
+    """Single NeonAuthVerifier (and its JWKS cache) created in the app lifespan."""
+    verifier: NeonAuthVerifier = request.app.state.neon_auth
+    return verifier
+
+
 CurrentUser = Annotated[User, Depends(get_current_user)]
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 CoinGecko = Annotated[CoinGeckoService, Depends(get_coingecko)]
+NeonAuth = Annotated[NeonAuthVerifier, Depends(get_neon_auth)]
