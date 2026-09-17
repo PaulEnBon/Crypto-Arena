@@ -94,7 +94,7 @@ Backend : `main.py`, `models/`, `schemas/`, `routers/`, `services/`, `database/`
 | Frontend  | React 19, TypeScript 5.9 (strict), Vite 7, React Router 7 (API v6 : `Routes`/`Outlet`/`useNavigate`), Context API + `useReducer`, Fetch API + `AbortController`, Tailwind CSS 4, Recharts 3, Vitest 3 + React Testing Library, ESLint 9 |
 | Backend   | Python 3.12+, FastAPI, Pydantic v2 + pydantic-settings, SQLAlchemy 2.0 (async, psycopg 3), PostgreSQL, PyJWT (JWT HS256), bcrypt, httpx, uvicorn, pytest + pytest-asyncio |
 | API externe | [CoinGecko API v3](https://docs.coingecko.com/) (plan Demo)                                                                          |
-| Déploiement | Vercel / Netlify (frontend), Render / Railway / Docker (backend), PostgreSQL hébergé (Render, Railway, Supabase, Neon…)              |
+| Déploiement | Vercel (frontend), Render instance gratuite (backend), Neon (PostgreSQL gratuit) ; alternatives : Netlify, Railway, Docker                |
 
 ## 5. Prérequis
 
@@ -268,9 +268,24 @@ Le bundle Recharts est séparé (`manualChunks`) pour un meilleur cache navigate
 
 ## 15. Déploiement
 
-**Base de données** : créer une instance PostgreSQL hébergée (Render, Railway, Supabase, Neon…) et récupérer son URL (ajouter `?sslmode=require` si le fournisseur l'exige).
+Architecture de production, entièrement gratuite :
 
-**Backend (Render)** : le fichier [`render.yaml`](render.yaml) décrit le service web + la base. Variables à renseigner dans le dashboard : `COINGECKO_API_KEY`, `CORS_ORIGINS` (URL publique du frontend), `JWT_SECRET` (générée automatiquement). Alternative Docker (Railway, Fly.io…) : [`backend/Dockerfile`](backend/Dockerfile), commande `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Les tables sont créées au premier démarrage (`AUTO_INIT_DB=true`).
+| Composant | Hébergeur | Offre |
+| --------- | --------- | ----- |
+| Frontend React | Vercel | Hobby, gratuit |
+| Backend FastAPI | Render | instance `free`, mise en veille après 15 min sans trafic |
+| PostgreSQL | Neon | gratuit sans expiration, 0,5 Go, mise à l'échelle à zéro |
+
+**Base de données (Neon)** : projet `Crypto Arena`, branche `production`, région `aws-eu-central-1` (Francfort). Utiliser l'URL **directe** (hôte sans `-pooler`) : le backend est un serveur long qui gère son propre pool SQLAlchemy (`pool_pre_ping` reconnecte après la mise en veille de Neon) et crée le schéma au démarrage, ce que Neon recommande de faire hors PgBouncer. Initialisation et données de démo depuis un poste local, avec cette URL dans `backend/.env` :
+
+```bash
+python -m app.database.init_db
+python -m app.database.seed
+```
+
+Les bases PostgreSQL gratuites de **Render** ne sont pas utilisées car elles expirent 30 jours après leur création.
+
+**Backend (Render)** : le blueprint [`render.yaml`](render.yaml) crée uniquement le service web, avec `plan: free` (sans ce champ, Render choisit une instance payante) et `region: frankfurt` pour être au plus près de Neon. Variables demandées à la création : `DATABASE_URL` (URL Neon directe) et `COINGECKO_API_KEY`. `JWT_SECRET` est générée automatiquement ; `CORS_ORIGINS` est à mettre à jour avec l'URL Vercel. Alternative Docker (Railway, Fly.io…) : [`backend/Dockerfile`](backend/Dockerfile), commande `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Les tables sont créées au démarrage si elles n'existent pas (`AUTO_INIT_DB=true`, idempotent).
 
 **Frontend (Vercel ou Netlify)** : racine `frontend/`, build `npm run build`, dossier `dist`. Variable `VITE_API_URL=https://votre-backend.onrender.com`. Les réécritures SPA sont fournies (`vercel.json`, `netlify.toml`, `public/_redirects`) pour que `/crypto/bitcoin` serve `index.html`.
 

@@ -1,9 +1,12 @@
-# Blueprint Render : backend FastAPI + PostgreSQL managé.
-# Le frontend est déployé séparément sur Vercel/Netlify (voir README > Déploiement).
+# Blueprint Render : backend FastAPI uniquement, sur l'instance GRATUITE.
+# La base PostgreSQL est hébergée sur Neon (offre gratuite sans expiration), pas sur Render.
+# Le frontend est déployé séparément sur Vercel (voir README > Déploiement).
 services:
   - type: web
     name: crypto-arena-api
     runtime: python
+    plan: free                 # obligatoire : sans ce champ, Render crée une instance payante
+    region: frankfurt          # même région que la base Neon (aws-eu-central-1) pour limiter la latence
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
@@ -16,18 +19,10 @@ services:
       - key: AUTO_INIT_DB
         value: "true"
       - key: DATABASE_URL
-        fromDatabase:
-          name: crypto-arena-db
-          property: connectionString
+        sync: false            # URL Neon DIRECTE (hôte sans "-pooler"), saisie dans le dashboard Render
       - key: JWT_SECRET
         generateValue: true
       - key: COINGECKO_API_KEY
         sync: false            # à renseigner dans le dashboard Render (jamais dans le dépôt)
       - key: CORS_ORIGINS
         value: https://VOTRE-FRONTEND.vercel.app   # URL publique du frontend, sans slash final
-
-databases:
-  - name: crypto-arena-db
-    plan: free
-    databaseName: crypto_arena
-    user: crypto_arena

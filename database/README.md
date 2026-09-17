@@ -29,8 +29,8 @@ Contraintes notables : `cash_balance >= 0`, `quantity >= 0`, `type IN ('BUY','SE
 
 ## Initialisation
 
-1. Créer la base : `createdb crypto_arena` (ou via pgAdmin / `docker compose up -d`).
-2. Renseigner `DATABASE_URL` dans `backend/.env`.
+1. Créer la base : projet **Neon** (production, voir README § Déploiement), ou en local `createdb crypto_arena` (pgAdmin / `docker compose up -d`).
+2. Renseigner `DATABASE_URL` dans `backend/.env`. Pour Neon, prendre l'URL **directe** (hôte sans `-pooler`), avec `sslmode=require`.
 3. Créer les tables + le catalogue d'actifs :
 
 ```bash

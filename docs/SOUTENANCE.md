@@ -120,7 +120,14 @@ Mots de passe bcrypt ; JWT signé avec un secret hors dépôt ; clé CoinGecko u
 
 ## 16. Déploiement
 
-Frontend statique (Vercel/Netlify, `VITE_API_URL` = URL publique du backend, réécriture SPA vers `index.html`). Backend sur Render (`render.yaml`) ou n'importe quel hébergeur Docker (`backend/Dockerfile`) avec PostgreSQL managé (`DATABASE_URL`, `sslmode=require` si nécessaire). Les tables sont créées au démarrage (`AUTO_INIT_DB`). CORS configuré par variable d'environnement.
+Trois hébergeurs, tous gratuits : frontend statique sur **Vercel** (`VITE_API_URL` = URL publique du backend, réécriture SPA vers `index.html`), backend sur **Render** en instance `free` (`render.yaml`, région Francfort), PostgreSQL sur **Neon** (région Francfort, même zone que le backend pour limiter la latence). Les tables sont créées au démarrage (`AUTO_INIT_DB`). CORS configuré par variable d'environnement.
+
+Questions probables sur ces choix :
+
+- *Pourquoi pas la base PostgreSQL de Render ?* → sur l'offre gratuite, elle expire 30 jours après sa création ; Neon est gratuit sans expiration.
+- *Pourquoi l'URL Neon directe et pas l'URL « pooler » ?* → le pooler PgBouncer sert surtout aux fonctions serverless qui ouvrent une connexion par requête. Notre backend est un serveur long qui a déjà son propre pool SQLAlchemy (15 connexions maximum) et crée le schéma au démarrage, opération que Neon recommande de faire en connexion directe.
+- *Que se passe-t-il quand Neon se met en veille ?* → la compute s'arrête après 5 minutes d'inactivité ; `pool_pre_ping=True` détecte les connexions mortes et les remplace, la première requête prend quelques centaines de millisecondes de plus.
+- *Et la veille de Render ?* → l'instance gratuite s'endort après 15 minutes sans trafic et met environ une minute à redémarrer : on la réveille avant la démonstration en ouvrant `/api/health`.
 
 ## 17. Limites et pistes
 
